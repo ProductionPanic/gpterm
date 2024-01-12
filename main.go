@@ -61,7 +61,7 @@ func main() {
 		bannerText:     "",
 		bannerStyle:    lipgloss.NewStyle(),
 	}
-	Program = tea.NewProgram(model)
+	Program = tea.NewProgram(model, tea.WithAltScreen())
 	_, e := Program.Run()
 	if e != nil {
 		panic(e)
