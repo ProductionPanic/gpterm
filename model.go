@@ -179,7 +179,7 @@ func (m Model) SendRequest() {
 		stream := false
 		ctx := context.Background()
 		e = client.Generate(ctx, &api.GenerateRequest{
-			Model:  "codellama:34b-instruct",
+			Model:  "gemma:7b",
 			Prompt: fmt.Sprintf(PromptTemplate, val),
 			Format: "json",
 			Stream: &stream,
