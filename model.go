@@ -73,15 +73,17 @@ func (m Model) resetBanner() Model {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg.(type) {
 	case tea.KeyMsg:
-		is_up := msg.(tea.KeyMsg).Type == tea.KeyUp
-		is_down := msg.(tea.KeyMsg).Type == tea.KeyDown
-		if is_up || is_down {
-			if is_up {
-				m.selectedAction--
-			} else {
-				m.selectedAction++
+		switch msg.(tea.KeyMsg).String() {
+		case "up", "k":
+			m.selectedAction--
+			if m.selectedAction < 0 {
+				m.selectedAction = 3
 			}
-			return m, nil
+		case "down", "j":
+			m.selectedAction++
+			if m.selectedAction > 3 {
+				m.selectedAction = 0
+			}
 		}
 	}
 
@@ -135,6 +137,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner = spinner.New(spinner.WithSpinner(randomSpinner()))
 			return m, m.spinner.Tick
 		}
+	case bannerMsg:
+		m.bannerText = msg.Text
+		return m, nil
 	}
 
 	var cmd tea.Cmd
@@ -144,10 +149,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmd, cmd2)
 }
 
+type bannerMsg struct {
+	Text string
+}
+
+func SetBanner(text string) {
+	Program.Send(
+		bannerMsg{
+			Text: text,
+		},
+	)
+}
+
 func (m Model) View() string {
 	w, h, _ := term.GetSize(0)
 	if m.Loading == true {
-		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.spinner.View())
+		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, m.viewLoading())
 	} else if m.Input.Focused() {
 		app := lipgloss.NewStyle().
 			Background(colors.Primary).
@@ -166,6 +183,10 @@ func (m Model) View() string {
 	}
 }
 
+func (m Model) viewLoading() string {
+	return lipgloss.JoinVertical(lipgloss.Center, m.spinner.View(), m.bannerStyle.Render(m.bannerText))
+}
+
 func (m Model) SendRequest() {
 	client, e := api.ClientFromEnvironment()
 	if e != nil {
@@ -178,8 +199,23 @@ func (m Model) SendRequest() {
 	go func() {
 		stream := false
 		ctx := context.Background()
+		_, err := client.Show(ctx, &api.ShowRequest{
+			Model: "gemma:2b",
+		})
+		if err != nil {
+			SetBanner("Pulling the model from the server")
+			client.Pull(ctx, &api.PullRequest{
+				Name: "gemma:2b",
+			}, func(resp api.ProgressResponse) error {
+				total := resp.Total
+				completed := resp.Completed
+				percent := int((float64(completed) / float64(total)) * 100)
+				SetBanner(fmt.Sprintf("Pulling model: %d%%", percent))
+				return nil
+			})
+		}
 		e = client.Generate(ctx, &api.GenerateRequest{
-			Model:  "gemma:7b",
+			Model:  "gemma:2b",
 			Prompt: fmt.Sprintf(PromptTemplate, val),
 			Format: "json",
 			Stream: &stream,
